@@ -1,0 +1,313 @@
+# Nginx前端服务部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-frontend
+  namespace: medical-ai
+  labels:
+    app: nginx-frontend
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-frontend
+  template:
+    metadata:
+      labels:
+        app: nginx-frontend
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: http
+        - containerPort: 443
+          name: https
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: frontend-static
+          mountPath: /usr/share/nginx/html
+        - name: ssl-certs
+          mountPath: /etc/nginx/ssl
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+      - name: frontend-static
+        configMap:
+          name: frontend-static
+      - name: ssl-certs
+        secret:
+          secretName: ssl-certs
+      initContainers:
+      - name: wait-for-backend
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z medical-ai-backend 8000; do
+            echo "等待后端服务启动..."
+            sleep 2
+          done
+          echo "后端服务已就绪"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-frontend
+  namespace: medical-ai
+  labels:
+    app: nginx-frontend
+    tier: frontend
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 443
+    protocol: TCP
+  selector:
+    app: nginx-frontend
+  loadBalancerSourceRanges:
+  - 0.0.0.0/0
+---
+# 前端静态文件ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-static
+  namespace: medical-ai
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>医学AI诊断平台</title>
+        <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+        <style>
+            body {
+                margin: 0;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .container {
+                text-align: center;
+                color: white;
+                padding: 2rem;
+                border-radius: 10px;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+            }
+            h1 {
+                font-size: 3rem;
+                margin-bottom: 1rem;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }
+            p {
+                font-size: 1.2rem;
+                margin-bottom: 2rem;
+                opacity: 0.9;
+            }
+            .status {
+                display: inline-block;
+                padding: 0.5rem 1rem;
+                background: rgba(76, 175, 80, 0.8);
+                border-radius: 20px;
+                font-weight: bold;
+            }
+            .loading {
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                border: 3px solid rgba(255,255,255,0.3);
+                border-radius: 50%;
+                border-top-color: #fff;
+                animation: spin 1s ease-in-out infinite;
+                margin-right: 10px;
+            }
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🏥 医学AI诊断平台</h1>
+            <p>智能医学影像分析与诊断辅助系统</p>
+            <div class="status">
+                <span class="loading"></span>
+                系统正在启动中...
+            </div>
+            <script>
+                // 检查后端服务状态
+                async function checkBackendStatus() {
+                    try {
+                        const response = await fetch('/api/health');
+                        if (response.ok) {
+                            document.querySelector('.status').innerHTML = '✅ 系统运行正常';
+                            document.querySelector('.status').style.background = 'rgba(76, 175, 80, 0.8)';
+                            // 可以在这里加载实际的前端应用
+                            setTimeout(() => {
+                                window.location.href = '/dashboard';
+                            }, 2000);
+                        } else {
+                            throw new Error('Backend not ready');
+                        }
+                    } catch (error) {
+                        document.querySelector('.status').innerHTML = '⚠️ 系统启动中，请稍候...';
+                        document.querySelector('.status').style.background = 'rgba(255, 152, 0, 0.8)';
+                        setTimeout(checkBackendStatus, 3000);
+                    }
+                }
+                
+                // 页面加载后开始检查
+                setTimeout(checkBackendStatus, 1000);
+            </script>
+        </div>
+    </body>
+    </html>
+  health.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Health Check</title>
+    </head>
+    <body>
+        <h1>Frontend Health Check</h1>
+        <p>Status: OK</p>
+        <p>Timestamp: <span id="timestamp"></span></p>
+        <script>
+            document.getElementById('timestamp').textContent = new Date().toISOString();
+        </script>
+    </body>
+    </html>
+---
+# Ingress配置
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: medical-ai-ingress
+  namespace: medical-ai
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - medical-ai.example.com
+    - api.medical-ai.example.com
+    secretName: medical-ai-tls
+  rules:
+  - host: medical-ai.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx-frontend
+            port:
+              number: 80
+  - host: api.medical-ai.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: medical-ai-backend
+            port:
+              number: 8000
+---
+# HorizontalPodAutoscaler for Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nginx-frontend-hpa
+  namespace: medical-ai
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-frontend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max

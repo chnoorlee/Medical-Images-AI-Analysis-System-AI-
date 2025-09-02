@@ -1,0 +1,33 @@
+{
+  "model_name": "test_chest_xray_classifier",
+  "version": "1.0.0",
+  "architecture": "CNN",
+  "input_shape": [
+    1,
+    224,
+    224
+  ],
+  "output_shape": [
+    3
+  ],
+  "num_classes": 3,
+  "class_names": [
+    "正常",
+    "肺炎",
+    "COVID-19"
+  ],
+  "preprocessing": {
+    "resize": [
+      224,
+      224
+    ],
+    "normalize": {
+      "mean": [
+        0.485
+      ],
+      "std": [
+        0.229
+      ]
+    }
+  }
+}

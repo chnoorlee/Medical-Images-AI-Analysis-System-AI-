@@ -1,0 +1,428 @@
+# 后端API服务部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medical-ai-backend
+  namespace: medical-ai
+  labels:
+    app: medical-ai-backend
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: medical-ai-backend
+  template:
+    metadata:
+      labels:
+        app: medical-ai-backend
+        tier: backend
+    spec:
+      imagePullSecrets:
+      - name: registry-secret
+      containers:
+      - name: backend
+        image: medical-ai/backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: REDIS_URL
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: SECRET_KEY
+        - name: MINIO_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: MINIO_ENDPOINT
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: MINIO_ACCESS_KEY
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: MINIO_SECRET_KEY
+        envFrom:
+        - configMapRef:
+            name: medical-ai-config
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: logs
+          mountPath: /app/logs
+        - name: models
+          mountPath: /app/models
+          readOnly: true
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: uploads-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: logs-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      initContainers:
+      - name: wait-for-db
+        image: postgres:15-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres -p 5432 -U postgres; do
+            echo "等待数据库启动..."
+            sleep 2
+          done
+          echo "数据库已就绪"
+      - name: wait-for-redis
+        image: redis:7-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until redis-cli -h redis -p 6379 ping; do
+            echo "等待Redis启动..."
+            sleep 2
+          done
+          echo "Redis已就绪"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medical-ai-backend
+  namespace: medical-ai
+  labels:
+    app: medical-ai-backend
+    tier: backend
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  selector:
+    app: medical-ai-backend
+---
+# AI推理服务部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-inference
+  namespace: medical-ai
+  labels:
+    app: ai-inference
+    tier: ai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-inference
+  template:
+    metadata:
+      labels:
+        app: ai-inference
+        tier: ai
+    spec:
+      imagePullSecrets:
+      - name: registry-secret
+      nodeSelector:
+        accelerator: nvidia-tesla-v100
+      containers:
+      - name: ai-inference
+        image: medical-ai/ai-inference:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9091
+          name: metrics
+        env:
+        - name: MODEL_PATH
+          value: "/app/models"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: BATCH_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: medical-ai-config
+              key: BATCH_SIZE
+        - name: INFERENCE_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: medical-ai-config
+              key: INFERENCE_TIMEOUT
+        volumeMounts:
+        - name: models
+          mountPath: /app/models
+          readOnly: true
+        - name: logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "16Gi"
+            cpu: "8"
+            nvidia.com/gpu: 1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 20
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: logs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-inference
+  namespace: medical-ai
+  labels:
+    app: ai-inference
+    tier: ai
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+    protocol: TCP
+  selector:
+    app: ai-inference
+---
+# Celery Worker部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: medical-ai
+  labels:
+    app: celery-worker
+    tier: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+        tier: worker
+    spec:
+      imagePullSecrets:
+      - name: registry-secret
+      containers:
+      - name: celery-worker
+        image: medical-ai/backend:latest
+        command:
+        - celery
+        - -A
+        - backend.celery_app
+        - worker
+        - --loglevel=info
+        - --concurrency=4
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: REDIS_URL
+        - name: RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: RABBITMQ_URL
+        envFrom:
+        - configMapRef:
+            name: medical-ai-config
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: logs
+          mountPath: /app/logs
+        - name: models
+          mountPath: /app/models
+          readOnly: true
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - backend.celery_app
+            - inspect
+            - ping
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: uploads-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: logs-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+---
+# Celery Beat调度器
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: medical-ai
+  labels:
+    app: celery-beat
+    tier: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+        tier: scheduler
+    spec:
+      imagePullSecrets:
+      - name: registry-secret
+      containers:
+      - name: celery-beat
+        image: medical-ai/backend:latest
+        command:
+        - celery
+        - -A
+        - backend.celery_app
+        - beat
+        - --loglevel=info
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: REDIS_URL
+        - name: RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: medical-ai-secrets
+              key: RABBITMQ_URL
+        envFrom:
+        - configMapRef:
+            name: medical-ai-config
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: logs-pvc

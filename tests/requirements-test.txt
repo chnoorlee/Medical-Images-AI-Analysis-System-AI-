@@ -1,0 +1,315 @@
+# 测试依赖包
+# 医疗AI系统测试环境依赖
+
+# 核心测试框架
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-html>=3.2.0
+pytest-xdist>=3.3.0
+pytest-timeout>=2.1.0
+pytest-rerunfailures>=11.1.0
+pytest-randomly>=3.12.0
+pytest-mock>=3.11.0
+pytest-benchmark>=4.0.0
+pytest-monitor>=1.6.6
+pytest-sugar>=0.9.7
+pytest-clarity>=1.0.1
+pytest-picked>=0.4.6
+pytest-testmon>=2.0.0
+pytest-watch>=4.2.0
+pytest-parallel>=0.1.1
+pytest-json-report>=1.5.0
+pytest-metadata>=3.0.0
+pytest-order>=1.1.0
+pytest-dependency>=0.5.1
+pytest-repeat>=0.9.1
+pytest-instafail>=0.4.2
+pytest-emoji>=0.2.0
+pytest-progress>=1.2.5
+
+# HTTP客户端测试
+httpx>=0.24.0
+aiohttp>=3.8.0
+requests>=2.31.0
+requests-mock>=1.11.0
+responses>=0.23.0
+
+# 数据库测试
+sqlalchemy>=2.0.0
+alembic>=1.11.0
+aiosqlite>=0.19.0
+psycopg2-binary>=2.9.0
+asyncpg>=0.28.0
+sqlalchemy-utils>=0.41.0
+factory-boy>=3.3.0
+faker>=19.0.0
+
+# Redis测试
+redis>=4.6.0
+fakeredis>=2.16.0
+aioredis>=2.0.0
+
+# 文件和存储测试
+aiofiles>=23.0.0
+moto>=4.2.0  # AWS服务模拟
+boto3>=1.28.0
+botocore>=1.31.0
+miniotest>=1.0.0
+
+# AI/ML测试
+numpy>=1.24.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+torch>=2.0.0
+torchvision>=0.15.0
+tensorflow>=2.13.0
+onnx>=1.14.0
+onnxruntime>=1.15.0
+opencv-python>=4.8.0
+pillow>=10.0.0
+dicom2nifti>=2.4.0
+pydicom>=2.4.0
+nibabel>=5.1.0
+simpleITK>=2.2.0
+
+# 性能和监控测试
+psutil>=5.9.0
+memory-profiler>=0.61.0
+line-profiler>=4.1.0
+py-spy>=0.3.14
+cProfile>=1.0.0
+snakeviz>=2.2.0
+filprofiler>=2023.3.1
+
+# 数据可视化
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.15.0
+bokeh>=3.2.0
+pandas>=2.0.0
+
+# 网络和通信测试
+websockets>=11.0.0
+celery>=5.3.0
+kombu>=5.3.0
+pika>=1.3.0
+zmq>=0.0.0
+
+# 安全测试
+cryptography>=41.0.0
+jwt>=1.3.1
+passlib>=1.7.4
+bcrypt>=4.0.0
+argon2-cffi>=23.1.0
+
+# 配置和环境
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+click>=8.1.0
+typer>=0.9.0
+
+# 代码质量
+flake8>=6.0.0
+black>=23.7.0
+isort>=5.12.0
+mypy>=1.5.0
+pylint>=2.17.0
+bandit>=1.7.0
+safety>=2.3.0
+pre-commit>=3.3.0
+
+# 文档测试
+sphinx>=7.1.0
+sphinx-rtd-theme>=1.3.0
+mkdocs>=1.5.0
+mkdocs-material>=9.1.0
+
+# 容器和部署测试
+docker>=6.1.0
+kubernetes>=27.2.0
+helm>=3.12.0
+terraform>=1.5.0
+ansible>=8.2.0
+
+# 日期和时间
+freezegun>=1.2.0
+time-machine>=2.12.0
+
+# 模拟和存根
+responses>=0.23.0
+requests-mock>=1.11.0
+pretend>=1.0.9
+doubles>=1.5.3
+flexmock>=0.11.3
+
+# 并发和异步测试
+aioresponses>=0.7.4
+aiohttp-testing>=1.0.0
+asynctest>=0.13.0
+pytest-asyncio-cooperative>=0.28.0
+
+# 数据生成和验证
+hypothesis>=6.82.0
+schema>=0.7.5
+cerberus>=1.3.4
+marshmallow>=3.20.0
+voluptuous>=0.13.1
+
+# 文件格式处理
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+csv>=1.0
+json5>=0.9.0
+toml>=0.10.2
+yaml>=6.0
+xml>=0.4.3
+
+# 图像处理测试
+wand>=0.6.11
+imageio>=2.31.0
+scikit-image>=0.21.0
+
+# 地理位置测试
+geopy>=2.3.0
+folium>=0.14.0
+
+# 邮件测试
+yagmail>=0.15.0
+smtplib>=3.11.0
+
+# 缓存测试
+diskcache>=5.6.0
+cachetools>=5.3.0
+
+# 队列和任务测试
+rq>=1.15.0
+dramatiq>=1.13.0
+
+# 搜索测试
+elasticsearch>=8.9.0
+whoosh>=2.7.4
+
+# 国际化测试
+babel>=2.12.0
+gettext>=4.0
+
+# 开发工具
+ipython>=8.14.0
+jupyter>=1.0.0
+notebook>=7.0.0
+
+# 系统监控
+psutil>=5.9.0
+GPUtil>=1.4.0
+
+# 其他实用工具
+tqdm>=4.65.0
+rich>=13.5.0
+click>=8.1.0
+colorama>=0.4.6
+termcolor>=2.3.0
+
+# 版本控制
+gitpython>=3.1.0
+
+# 压缩和解压
+zipfile>=3.11.0
+tarfile>=3.11.0
+gzip>=3.11.0
+
+# 正则表达式
+regex>=2023.6.3
+
+# 随机数据生成
+random>=3.11.0
+secrets>=3.11.0
+uuid>=3.11.0
+
+# 字符串处理
+string>=3.11.0
+re>=3.11.0
+
+# 数学计算
+math>=3.11.0
+statistics>=3.11.0
+decimal>=3.11.0
+fractions>=3.11.0
+
+# 集合操作
+collections>=3.11.0
+itertools>=3.11.0
+functools>=3.11.0
+
+# 操作系统接口
+os>=3.11.0
+sys>=3.11.0
+platform>=3.11.0
+subprocess>=3.11.0
+
+# 文件系统
+pathlib>=3.11.0
+glob>=3.11.0
+shutil>=3.11.0
+tempfile>=3.11.0
+
+# 网络
+urllib>=3.11.0
+http>=3.11.0
+socket>=3.11.0
+
+# 多线程和多进程
+threading>=3.11.0
+multiprocessing>=3.11.0
+concurrent>=3.11.0
+
+# 序列化
+pickle>=3.11.0
+json>=3.11.0
+
+# 加密和哈希
+hashlib>=3.11.0
+hmac>=3.11.0
+
+# 编码和解码
+base64>=3.11.0
+codecs>=3.11.0
+
+# 警告和异常
+warnings>=3.11.0
+traceback>=3.11.0
+
+# 垃圾回收
+gc>=3.11.0
+weakref>=3.11.0
+
+# 内省和反射
+inspect>=3.11.0
+types>=3.11.0
+typing>=3.11.0
+
+# 上下文管理
+contextlib>=3.11.0
+
+# 抽象基类
+abc>=3.11.0
+
+# 数据类
+dataclasses>=3.11.0
+
+# 枚举
+enum>=3.11.0
+
+# 复制
+copy>=3.11.0
+
+# 运算符
+operator>=3.11.0
+
+# 二进制数据
+struct>=3.11.0
+array>=3.11.0
+bytes>=3.11.0
+bytearray>=3.11.0
+memoryview>=3.11.0
