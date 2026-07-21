@@ -745,99 +745,150 @@ class ModelService:
     
     async def _prepare_training_data(self, training_data: Dict[str, Any],
                                    training_config: Dict[str, Any]) -> Tuple[DataLoader, DataLoader]:
-        """准备训练数据"""
-        # 这里是简化的数据准备逻辑
-        # 实际应用中需要根据具体的数据格式和存储方式来实现
-        
-        # 数据变换
-        transform = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-        
-        # 创建数据集（这里使用模拟数据）
-        train_images = [np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8) for _ in range(100)]
-        train_labels = [np.random.randint(0, 2) for _ in range(100)]
-        
-        val_images = [np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8) for _ in range(20)]
-        val_labels = [np.random.randint(0, 2) for _ in range(20)]
-        
-        train_dataset = MedicalImageDataset(train_images, train_labels, transform)
-        val_dataset = MedicalImageDataset(val_images, val_labels, transform)
-        
-        batch_size = training_config.get('batch_size', 16)
-        
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-        
-        return train_loader, val_loader
+        """准备训练数据 - 使用真实的医学影像数据集
+
+        支持的数据源:
+        - medmnist: 使用MedMNIST数据集 (推荐用于初始训练)
+        - imagefolder: 使用按类别组织的本地图像文件夹
+        - custom: 自定义数据源配置
+        """
+        data_source = training_data.get('source', 'medmnist')
+        dataset_name = training_data.get('dataset_name', 'pneumoniamnist')
+
+        if data_source == 'medmnist':
+            # 使用MedMNIST真实医学数据集
+            from backend.training.datasets import create_dataloaders
+
+            train_loader, val_loader, test_loader, num_classes, task_type = create_dataloaders(
+                dataset_name=dataset_name,
+                data_dir=training_data.get('data_dir', './data'),
+                batch_size=training_config.get('batch_size', 32),
+                val_batch_size=training_config.get('batch_size', 32) * 2,
+                num_workers=training_config.get('num_workers', 4),
+                input_size=training_config.get('input_size', 224),
+                augmentation_intensity=training_config.get('augmentation_intensity', 'medium'),
+                pin_memory=True,
+                use_weighted_sampler=training_config.get('use_weighted_sampler', True),
+            )
+            return train_loader, val_loader
+
+        elif data_source == 'imagefolder':
+            # 使用本地图像文件夹
+            from backend.training.datasets import ImageFolderDataset, get_medical_transforms
+
+            input_size = training_config.get('input_size', 224)
+            train_transform = get_medical_transforms(
+                input_size=input_size, is_train=True,
+                augmentation_intensity=training_config.get('augmentation_intensity', 'medium'),
+                modality=training_data.get('modality', 'xray'),
+            )
+            val_transform = get_medical_transforms(
+                input_size=input_size, is_train=False,
+                modality=training_data.get('modality', 'xray'),
+            )
+
+            train_dataset = ImageFolderDataset(
+                root_dir=training_data['train_dir'],
+                transform=train_transform,
+            )
+            val_dataset = ImageFolderDataset(
+                root_dir=training_data['val_dir'],
+                transform=val_transform,
+            )
+
+            batch_size = training_config.get('batch_size', 16)
+
+            train_loader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True,
+                num_workers=training_config.get('num_workers', 4),
+                pin_memory=True,
+            )
+            val_loader = DataLoader(
+                val_dataset, batch_size=batch_size, shuffle=False,
+                num_workers=training_config.get('num_workers', 4),
+                pin_memory=True,
+            )
+            return train_loader, val_loader
+
+        else:
+            raise ValueError(f"不支持的数据源: {data_source}。请使用 'medmnist' 或 'imagefolder'。")
     
     async def _train_pytorch_model(self, model: nn.Module, train_loader: DataLoader,
                                  val_loader: DataLoader, config: Dict[str, Any]) -> Dict[str, Any]:
-        """训练PyTorch模型"""
-        # 训练配置
-        epochs = config.get('epochs', 10)
-        learning_rate = config.get('learning_rate', 0.001)
-        
-        # 优化器和损失函数
-        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-        criterion = nn.CrossEntropyLoss()
-        
-        # 训练指标
-        train_losses = []
-        val_losses = []
-        val_accuracies = []
-        
-        for epoch in range(epochs):
-            # 训练阶段
-            model.train()
-            train_loss = 0.0
-            
-            for batch_idx, (data, target) in enumerate(train_loader):
-                data, target = data.to(self.device), target.to(self.device)
-                
-                optimizer.zero_grad()
-                output = model(data)
-                loss = criterion(output, target)
-                loss.backward()
-                optimizer.step()
-                
-                train_loss += loss.item()
-            
-            train_loss /= len(train_loader)
-            train_losses.append(train_loss)
-            
-            # 验证阶段
-            model.eval()
-            val_loss = 0.0
-            correct = 0
-            total = 0
-            
-            with torch.no_grad():
-                for data, target in val_loader:
-                    data, target = data.to(self.device), target.to(self.device)
-                    output = model(data)
-                    val_loss += criterion(output, target).item()
-                    
-                    _, predicted = torch.max(output.data, 1)
-                    total += target.size(0)
-                    correct += (predicted == target).sum().item()
-            
-            val_loss /= len(val_loader)
-            val_accuracy = 100 * correct / total
-            
-            val_losses.append(val_loss)
-            val_accuracies.append(val_accuracy)
-            
-            logger.info(f"Epoch {epoch+1}/{epochs}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.2f}%")
-        
+        """使用优化的现代训练流水线训练PyTorch模型
+
+        特性:
+        - 自动混合精度训练 (AMP) 提升2-3倍速度
+        - 梯度累积支持更大有效批次
+        - 余弦退火学习率调度
+        - 指数移动平均 (EMA) 模型权重
+        - 早停防止过拟合
+        - 梯度裁剪稳定训练
+        """
+        from backend.training.trainer import MedicalImageTrainer
+        from backend.training.metrics import MetricsTracker
+
+        num_classes = config.get('num_classes', 2)
+        task = config.get('task', 'binary')
+
+        # 构建训练器配置
+        trainer_config = {
+            'epochs': config.get('epochs', 50),
+            'learning_rate': config.get('learning_rate', 1e-4),
+            'weight_decay': config.get('weight_decay', 1e-4),
+            'optimizer': config.get('optimizer', 'adamw'),
+            'scheduler': config.get('scheduler', 'cosine_warmup'),
+            'warmup_epochs': config.get('warmup_epochs', 5),
+            'min_lr': config.get('min_lr', 1e-7),
+            'mixed_precision': config.get('mixed_precision', True),
+            'gradient_accumulation_steps': config.get('gradient_accumulation_steps', 1),
+            'max_grad_norm': config.get('max_grad_norm', 1.0),
+            'early_stopping_patience': config.get('early_stopping_patience', 10),
+            'early_stopping_min_delta': config.get('early_stopping_min_delta', 1e-4),
+            'early_stopping_metric': config.get('early_stopping_metric', 'val_auc'),
+            'use_ema': config.get('use_ema', True),
+            'use_tensorboard': config.get('use_tensorboard', True),
+            'use_wandb': config.get('use_wandb', False),
+            'output_dir': config.get('output_dir', './trained_models'),
+            'experiment_name': config.get('experiment_name',
+                f"model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
+            'seed': config.get('seed', 42),
+        }
+
+        # 创建训练器并训练
+        trainer = MedicalImageTrainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            config=trainer_config,
+            task=task,
+            num_classes=num_classes,
+        )
+
+        # 在线程池中运行训练 (因为训练是同步的但我们在async上下文中)
+        loop = asyncio.get_event_loop()
+        results = await loop.run_in_executor(
+            self.executor,
+            trainer.fit
+        )
+
+        # 提取训练指标
+        train_metrics = results.get('train_metrics', {})
+        val_metrics = results.get('val_metrics', {})
+        test_metrics = results.get('test_metrics', {})
+
         return {
-            'train_losses': train_losses,
-            'val_losses': val_losses,
-            'val_accuracies': val_accuracies,
-            'final_val_accuracy': val_accuracies[-1] if val_accuracies else 0.0
+            'train_losses': trainer.training_history.get('train_loss', []),
+            'val_losses': trainer.training_history.get('val_loss', []),
+            'val_auc_scores': trainer.training_history.get('val_auc', []),
+            'val_accuracies': trainer.training_history.get('val_accuracy', []),
+            'best_val_metric': results.get('best_metric', 0.0),
+            'best_epoch': results.get('best_epoch', 0),
+            'final_val_accuracy': val_metrics.get('accuracy', 0.0),
+            'final_val_auc': val_metrics.get('auc_roc', 0.0),
+            'final_val_f1': val_metrics.get('f1_score', 0.0),
+            'test_metrics': test_metrics,
+            'total_time_minutes': results.get('total_time_minutes', 0),
         }
     
     async def _save_trained_model(self, model: nn.Module, model_id: str,
